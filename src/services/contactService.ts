@@ -10,7 +10,8 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
         { email },
         { phoneNumber }
       ]
-    }
+    },
+    order: [['createdAt', 'ASC']]
   });
 
   let primaryContact: any = null;
@@ -21,12 +22,31 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
   if (contacts.length === 0) {
     primaryContact = await Contact.create({ email, phoneNumber });
   } else {
+    let similarContact = contacts.find(contact => contact.email === email && contact.phoneNumber === phoneNumber)
     primaryContact = contacts.find(contact => contact.linkPrecedence === 'primary') || contacts[0];
-    let newSecondaryContact = await Contact.create({
-      email, phoneNumber,
-      linkedId: primaryContact.id,
-      linkPrecedence: 'secondary'
-    });
+    let similarPrimaryContact = contacts.filter(contact => contact.linkPrecedence === 'primary')[1];
+
+    let newSecondaryContact;
+    if (!similarContact && !similarPrimaryContact) {
+      newSecondaryContact = await Contact.create({
+        email, phoneNumber,
+        linkedId: primaryContact.id,
+        linkPrecedence: 'secondary'
+      });
+      secondaryContactIds.add(newSecondaryContact.id);
+
+      if (newSecondaryContact.email) allEmails.add(newSecondaryContact.email);
+      if (newSecondaryContact.phoneNumber) allPhoneNumbers.add(newSecondaryContact.phoneNumber);
+
+
+    }
+
+    if(similarPrimaryContact){
+      similarPrimaryContact.linkPrecedence = 'secondary';
+      similarPrimaryContact.linkedId = primaryContact.id;
+      await similarPrimaryContact.save();
+    }
+
 
     for (const contact of contacts) {
       if (contact.email) allEmails.add(contact.email);
@@ -35,11 +55,7 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
         secondaryContactIds.add(contact.id);
       }
     }
-    secondaryContactIds.add(newSecondaryContact.id);
 
-
-    if (newSecondaryContact.email) allEmails.add(newSecondaryContact.email);
-    if (newSecondaryContact.phoneNumber) allPhoneNumbers.add(newSecondaryContact.phoneNumber);
 
   }
 
